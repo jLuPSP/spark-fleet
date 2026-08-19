@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spark-fleet/schemas/teams.schema.json",
+  "title": "spark-fleet team access and quotas",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["teams"],
+  "properties": {
+    "teams": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "entra_app_role", "allowed_models", "limits"],
+        "properties": {
+          "name": {
+            "description": "Short team slug. Used in metrics labels and the dev token mint.",
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,30}$"
+          },
+          "entra_app_role": {
+            "description": "The Entra app role value that appears in the token's roles claim.",
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$"
+          },
+          "allowed_models": {
+            "description": "Catalog model names this team may call. Cross-checked against models.yaml.",
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9.-]{1,62}$"
+            }
+          },
+          "limits": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["requests_per_minute", "tokens_per_hour"],
+            "properties": {
+              "requests_per_minute": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "tokens_per_hour": {
+                "description": "Total (prompt + completion) tokens per hour across all models.",
+                "type": "integer",
+                "minimum": 1000
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

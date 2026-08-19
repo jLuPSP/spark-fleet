@@ -1,0 +1,70 @@
+---
+- name: Stage approved internal model artifacts on eligible DGX Sparks
+  hosts: spark_nodes
+  become: true
+  gather_facts: false
+  vars:
+    model_store_bearer_token: ""
+    model_store_ca_bundle: ""
+  tasks:
+    - name: Require a generated model staging manifest
+      ansible.builtin.assert:
+        that:
+          - model_stage_manifest_file is defined
+        fail_msg: >-
+          Pass -e model_stage_manifest_file=build/model-stage-<topology>.yml after
+          running scripts/render_stage_vars.py.
+
+    - name: Load the generated model staging manifest
+      ansible.builtin.include_vars:
+        file: "{{ model_stage_manifest_file }}"
+
+    - name: Validate the model staging manifest
+      ansible.builtin.assert:
+        that:
+          - model_stage_models is iterable
+
+    - name: Create verified model store
+      ansible.builtin.file:
+        path: /var/lib/spark-fleet/models
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install model staging verifier
+      ansible.builtin.copy:
+        src: ../scripts/stage_model.py
+        dest: /usr/local/sbin/spark-fleet-stage-model
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Download, verify, and atomically activate required model revisions
+      ansible.builtin.command:
+        argv:
+          - python3
+          - /usr/local/sbin/spark-fleet-stage-model
+          - --artifact-uri
+          - "{{ item.artifact_uri }}"
+          - --artifact-sha256
+          - "{{ item.artifact_sha256 }}"
+          - --manifest-sha256
+          - "{{ item.manifest_sha256 }}"
+          - --size-gb
+          - "{{ item.size_gb | string }}"
+          - --minimum-free-gb
+          - "{{ item.minimum_free_gb | string }}"
+          - --root
+          - /var/lib/spark-fleet/models
+          - --model
+          - "{{ item.name }}"
+          - --revision
+          - "{{ item.revision }}"
+      environment:
+        MODEL_STORE_BEARER_TOKEN: "{{ model_store_bearer_token }}"
+        MODEL_STORE_CA_BUNDLE: "{{ model_store_ca_bundle }}"
+      loop: "{{ model_stage_models }}"
+      when: inventory_hostname in item.target_hosts
+      no_log: "{{ model_store_bearer_token | length > 0 }}"
+      changed_when: true

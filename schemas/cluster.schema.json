@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spark-fleet/schemas/cluster.schema.json",
+  "title": "spark-fleet Kubernetes cluster profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["api_version", "cluster"],
+  "properties": {
+    "api_version": { "const": "spark-fleet.example/v1alpha1" },
+    "cluster": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "namespace", "architecture", "fabric_topology", "fabric", "gpu_stack", "gpu_sharing", "model_storage", "pair_backend", "gateway", "nodes"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,62}$" },
+        "namespace": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,62}$" },
+        "architecture": { "type": "string", "enum": ["amd64", "arm64"] },
+        "fabric_topology": { "type": "string", "enum": ["direct-pairs", "switched"] },
+        "fabric": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["socket_interface", "rdma_hcas"],
+          "properties": {
+            "socket_interface": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+            "rdma_hcas": {
+              "type": "array",
+              "minItems": 2,
+              "uniqueItems": true,
+              "items": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" }
+            }
+          }
+        },
+        "gpu_stack": { "type": "string", "enum": ["device-plugin", "gpu-operator"] },
+        "pair_backend": { "type": "string", "enum": ["mock", "kuberay"] },
+        "gpu_sharing": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "replicas"],
+          "properties": {
+            "mode": { "type": "string", "enum": ["exclusive", "time-slicing"] },
+            "replicas": { "type": "integer", "minimum": 1, "maximum": 8 }
+          }
+        },
+        "model_storage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["capacity_gb", "max_cache_utilization", "minimum_free_gb"],
+          "properties": {
+            "capacity_gb": {
+              "description": "Purchased local NVMe capacity. Null blocks model activation until hardware discovery records 1000 or 4000 GB.",
+              "type": ["number", "null"],
+              "minimum": 1
+            },
+            "max_cache_utilization": {
+              "description": "Maximum fraction of the device allocated to desired unpacked model revisions.",
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 0.9
+            },
+            "minimum_free_gb": {
+              "description": "Free-space floor retained during archive download and extraction.",
+              "type": "number",
+              "minimum": 1
+            }
+          }
+        },
+        "gateway": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["service_type"],
+          "properties": {
+            "service_type": { "type": "string", "enum": ["ClusterIP", "NodePort", "LoadBalancer"] },
+            "node_port": { "type": "integer", "minimum": 30000, "maximum": 32767 }
+          }
+        },
+        "nodes": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "$ref": "#/$defs/node" }
+        },
+        "spares": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/node" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kubernetes_node", "accelerator", "gpu_memory_gb", "simulated"],
+      "properties": {
+        "kubernetes_node": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,62}$" },
+        "accelerator": { "type": "string", "enum": ["gpu", "mock"] },
+        "gpu_memory_gb": { "type": "number", "minimum": 0 },
+        "gpu_resource": { "type": "string", "pattern": "^[a-z0-9.-]+/[a-z0-9.-]+$" },
+        "simulated": { "type": "boolean" },
+        "fabric_group": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$" },
+        "preferred_workload": { "type": "string", "enum": ["inference", "training", "flex"] },
+        "control_plane": { "type": "boolean" }
+      }
+    }
+  }
+}

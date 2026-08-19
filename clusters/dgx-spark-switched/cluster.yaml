@@ -1,0 +1,32 @@
+api_version: spark-fleet.example/v1alpha1
+cluster:
+  name: dgx-spark-switched
+  namespace: spark-fleet
+  architecture: arm64
+  fabric_topology: switched
+  fabric:
+    socket_interface: enp1s0f1np1
+    rdma_hcas: [rocep1s0f1, roceP2p1s0f1]
+  gpu_stack: gpu-operator
+  gpu_sharing:
+    mode: exclusive
+    replicas: 1
+  model_storage:
+    # Record the purchased 1000 or 4000 GB SKU before activating a model.
+    capacity_gb: null
+    max_cache_utilization: 0.70
+    minimum_free_gb: 200
+  pair_backend: kuberay
+  gateway:
+    service_type: ClusterIP
+  nodes:
+    # All eight nodes share one scheduling fabric. Workload preference preserves
+    # the normal 6/2 inference/training policy without physically reserving nodes.
+    node1: { kubernetes_node: spark-01, accelerator: gpu, gpu_memory_gb: 128, gpu_resource: nvidia.com/gpu, simulated: false, fabric_group: fabric-a, preferred_workload: inference, control_plane: true }
+    node2: { kubernetes_node: spark-02, accelerator: gpu, gpu_memory_gb: 128, gpu_resource: nvidia.com/gpu, simulated: false, fabric_group: fabric-a, preferred_workload: inference }
+    node3: { kubernetes_node: spark-03, accelerator: gpu, gpu_memory_gb: 128, gpu_resource: nvidia.com/gpu, simulated: false, fabric_group: fabric-a, preferred_workload: inference }
+    node4: { kubernetes_node: spark-04, accelerator: gpu, gpu_memory_gb: 128, gpu_resource: nvidia.com/gpu, simulated: false, fabric_group: fabric-a, preferred_workload: inference }
+    node5: { kubernetes_node: spark-05, accelerator: gpu, gpu_memory_gb: 128, gpu_resource: nvidia.com/gpu, simulated: false, fabric_group: fabric-a, preferred_workload: inference }
+    node6: { kubernetes_node: spark-06, accelerator: gpu, gpu_memory_gb: 128, gpu_resource: nvidia.com/gpu, simulated: false, fabric_group: fabric-a, preferred_workload: inference }
+    node7: { kubernetes_node: spark-07, accelerator: gpu, gpu_memory_gb: 128, gpu_resource: nvidia.com/gpu, simulated: false, fabric_group: fabric-a, preferred_workload: training }
+    node8: { kubernetes_node: spark-08, accelerator: gpu, gpu_memory_gb: 128, gpu_resource: nvidia.com/gpu, simulated: false, fabric_group: fabric-a, preferred_workload: training }

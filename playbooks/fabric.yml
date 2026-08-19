@@ -1,0 +1,82 @@
+---
+- name: Configure and verify the DGX Spark ConnectX-7 fabric
+  hosts: spark_nodes
+  become: true
+  gather_facts: false
+  serial: 1
+  handlers:
+    - name: Apply ConnectX-7 netplan
+      ansible.builtin.command: netplan apply
+      changed_when: true
+  tasks:
+    - name: Validate fabric inventory
+      ansible.builtin.assert:
+        that:
+          - fabric_topology in ['direct-pairs', 'switched']
+          - fabric_interfaces is defined
+          - fabric_interfaces | length == 2
+          - fabric_validation_group in groups
+          - inventory_hostname in groups[fabric_validation_group]
+        fail_msg: Each Spark needs two logical interfaces and a valid fabric validation group
+
+    - name: Verify declared ConnectX-7 interfaces exist
+      ansible.builtin.command: "ip link show dev {{ item.name }}"
+      loop: "{{ fabric_interfaces }}"
+      changed_when: false
+
+    - name: Render the ConnectX-7 network configuration
+      ansible.builtin.template:
+        src: templates/40-spark-fabric.yaml.j2
+        dest: /etc/netplan/40-spark-fabric.yaml
+        owner: root
+        group: root
+        mode: "0600"
+        backup: true
+      when: fabric_apply | bool
+      notify: Apply ConnectX-7 netplan
+
+    - name: Apply fabric changes before validation
+      ansible.builtin.meta: flush_handlers
+
+    - name: Read ConnectX-7 carrier state
+      ansible.builtin.slurp:
+        src: "/sys/class/net/{{ item.name }}/carrier"
+      loop: "{{ fabric_interfaces }}"
+      register: fabric_carriers
+      when:
+        - fabric_apply | bool
+        - fabric_require_carrier | default(true) | bool
+
+    - name: Require carrier on every configured fabric interface
+      ansible.builtin.assert:
+        that: item.content | b64decode | trim == '1'
+        fail_msg: "{{ item.item.name }} has no carrier; check the QSFP cable and switch port"
+      loop: "{{ fabric_carriers.results | default([]) }}"
+      when:
+        - fabric_apply | bool
+        - fabric_require_carrier | default(true) | bool
+
+    - name: Build the fabric validation address list
+      ansible.builtin.set_fact:
+        fabric_validation_addresses: >-
+          {{ groups[fabric_validation_group]
+             | difference([inventory_hostname])
+             | map('extract', hostvars, 'fabric_interfaces')
+             | flatten
+             | map(attribute='address')
+             | map('regex_replace', '/.*$', '')
+             | list }}
+      when: fabric_apply | bool
+
+    - name: Verify every peer on both logical fabric interfaces
+      ansible.builtin.command: "ping -c 2 -W 2 {{ item }}"
+      loop: "{{ fabric_validation_addresses | default([]) }}"
+      changed_when: false
+      when: fabric_apply | bool
+
+    - name: Show planned fabric without changing the host
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }} would configure {{ fabric_interfaces }} as
+          {{ fabric_topology }}; set fabric_apply=true in the private inventory to apply it
+      when: not (fabric_apply | bool)

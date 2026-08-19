@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spark-fleet/schemas/models.schema.json",
+  "title": "spark-fleet aggregate model catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["models"],
+  "properties": {
+    "models": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/model" }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name", "state", "repo", "revision", "task", "quant", "context_len",
+        "vram_gb", "requires_remote_code", "allow_unsafe_serialization", "owner",
+        "approval_ticket", "security_approval"
+      ],
+      "properties": {
+        "name": {
+          "description": "Stable public model ID clients send in OpenAI requests.",
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9.-]{1,62}$"
+        },
+        "state": {
+          "description": "Approved models may be imported but are not routed; active models require a verified internal artifact and placement.",
+          "type": "string",
+          "enum": ["approved", "active"]
+        },
+        "repo": {
+          "description": "Original Hugging Face repository ID used only by the controlled importer.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+        },
+        "revision": {
+          "description": "Pinned Hugging Face commit SHA; branches and tags are forbidden.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "task": { "type": "string", "enum": ["generation", "embedding"] },
+        "quant": { "type": "string", "enum": ["none", "fp8", "awq", "gptq", "gguf"] },
+        "context_len": { "type": "integer", "minimum": 1, "maximum": 1048576 },
+        "vram_gb": { "type": "number", "exclusiveMinimum": 0 },
+        "size_gb": {
+          "description": "Measured unpacked artifact size produced by the importer.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "requires_remote_code": { "type": "boolean" },
+        "allow_unsafe_serialization": {
+          "description": "Explicit security exception for pickle-compatible weight formats.",
+          "type": "boolean"
+        },
+        "artifact_uri": {
+          "description": "HTTPS URL in the approved internal artifact store; serving pods never use it.",
+          "type": "string",
+          "pattern": "^https://\\S+$"
+        },
+        "artifact_sha256": { "$ref": "#/$defs/sha256" },
+        "manifest_sha256": { "$ref": "#/$defs/sha256" },
+        "engine_args": {
+          "type": "object",
+          "additionalProperties": { "type": ["string", "number", "boolean"] }
+        },
+        "placement": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["node", "gpu_memory_utilization"],
+            "properties": {
+              "node": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$" },
+              "replicas": { "type": "integer", "minimum": 1, "maximum": 8, "default": 1 },
+              "gpu_memory_utilization": { "type": "number", "minimum": 0.05, "maximum": 0.98 },
+              "tensor_parallel": { "type": "integer", "minimum": 1, "maximum": 8, "default": 1 }
+            }
+          }
+        },
+        "owner": { "type": "string", "minLength": 1 },
+        "approval_ticket": { "type": "string", "pattern": "^[A-Z][A-Z0-9]*-[0-9]+$" },
+        "security_approval": { "type": "string", "pattern": "^[A-Z][A-Z0-9]*-[0-9]+$" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "active" } }, "required": ["state"] },
+          "then": {
+            "required": [
+              "artifact_uri", "artifact_sha256", "manifest_sha256", "size_gb", "placement"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

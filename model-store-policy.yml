@@ -1,0 +1,4 @@
+# Replace this non-routable example prefix with the approved internal model store
+# before activating a model. CI rejects every active artifact outside this list.
+allowed_artifact_prefixes:
+  - https://models.example.invalid/

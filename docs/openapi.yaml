@@ -1,0 +1,303 @@
+openapi: 3.1.0
+info:
+  title: spark-fleet OpenAI-compatible API
+  version: 1.0.0
+  description: >-
+    The harness-facing subset implemented by the APISIX gateway. Requests use a
+    Microsoft Entra access token as the bearer credential. Generation and embedding
+    models are selected by the model field and are never cross-routed.
+servers:
+  - url: https://gateway.example/v1
+    description: Environment-specific APISIX endpoint
+security:
+  - entraBearer: []
+paths:
+  /models:
+    get:
+      operationId: listModels
+      summary: List models allowed for the caller's Entra role
+      responses:
+        "200":
+          description: Team-filtered model catalog
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelList"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /chat/completions:
+    post:
+      operationId: createChatCompletion
+      summary: Create a chat completion with a generation model
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatRequest"
+      responses:
+        "200":
+          description: OpenAI-compatible completion or SSE stream
+          headers:
+            X-RateLimit-Limit: { $ref: "#/components/headers/RequestLimit" }
+            X-RateLimit-Remaining: { $ref: "#/components/headers/RequestRemaining" }
+            X-RateLimit-Reset: { $ref: "#/components/headers/RequestReset" }
+            X-AI-Team-RateLimit-Limit: { $ref: "#/components/headers/TokenLimit" }
+            X-AI-Team-RateLimit-Remaining: { $ref: "#/components/headers/TokenRemaining" }
+            X-AI-Team-RateLimit-Reset: { $ref: "#/components/headers/TokenReset" }
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatResponse"
+            text/event-stream:
+              schema: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/UnknownModel" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /completions:
+    post:
+      operationId: createCompletion
+      summary: Create a legacy text completion with a generation model
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompletionRequest"
+      responses:
+        "200":
+          description: OpenAI-compatible text completion
+          headers:
+            X-RateLimit-Limit: { $ref: "#/components/headers/RequestLimit" }
+            X-RateLimit-Remaining: { $ref: "#/components/headers/RequestRemaining" }
+            X-RateLimit-Reset: { $ref: "#/components/headers/RequestReset" }
+            X-AI-Team-RateLimit-Limit: { $ref: "#/components/headers/TokenLimit" }
+            X-AI-Team-RateLimit-Remaining: { $ref: "#/components/headers/TokenRemaining" }
+            X-AI-Team-RateLimit-Reset: { $ref: "#/components/headers/TokenReset" }
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompletionResponse"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/UnknownModel" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /embeddings:
+    post:
+      operationId: createEmbedding
+      summary: Embed one string or an array of strings with an embedding model
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmbeddingRequest"
+      responses:
+        "200":
+          description: OpenAI-compatible embedding list
+          headers:
+            X-RateLimit-Limit: { $ref: "#/components/headers/RequestLimit" }
+            X-RateLimit-Remaining: { $ref: "#/components/headers/RequestRemaining" }
+            X-RateLimit-Reset: { $ref: "#/components/headers/RequestReset" }
+            X-AI-Team-RateLimit-Limit: { $ref: "#/components/headers/TokenLimit" }
+            X-AI-Team-RateLimit-Remaining: { $ref: "#/components/headers/TokenRemaining" }
+            X-AI-Team-RateLimit-Reset: { $ref: "#/components/headers/TokenReset" }
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmbeddingResponse"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/UnknownModel" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+components:
+  headers:
+    RequestLimit:
+      description: Maximum requests for this team and model in the current window.
+      schema: { type: integer }
+    RequestRemaining:
+      description: Requests remaining for this team and model in the current window.
+      schema: { type: integer }
+    RequestReset:
+      description: Seconds until the request-count window resets.
+      schema: { type: number }
+    TokenLimit:
+      description: Maximum tokens for this team and model in the current window.
+      schema: { type: integer }
+    TokenRemaining:
+      description: Tokens remaining for this team and model in the current window.
+      schema: { type: integer }
+    TokenReset:
+      description: Seconds until the token window resets.
+      schema: { type: number }
+  securitySchemes:
+    entraBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Entra v2 access token whose audience is the fleet API client ID.
+  responses:
+    Unauthorized:
+      description: Missing, expired, malformed, or wrong-audience access token
+    Forbidden:
+      description: Token lacks a fleet app role or the role cannot call this model
+    UnknownModel:
+      description: Model is not cataloged for this endpoint family
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    RateLimited:
+      description: Per-team request or token quota exhausted
+      headers:
+        X-RateLimit-Limit: { $ref: "#/components/headers/RequestLimit" }
+        X-RateLimit-Remaining: { $ref: "#/components/headers/RequestRemaining" }
+        X-RateLimit-Reset: { $ref: "#/components/headers/RequestReset" }
+        X-AI-Team-RateLimit-Limit: { $ref: "#/components/headers/TokenLimit" }
+        X-AI-Team-RateLimit-Remaining: { $ref: "#/components/headers/TokenRemaining" }
+        X-AI-Team-RateLimit-Reset: { $ref: "#/components/headers/TokenReset" }
+  schemas:
+    Model:
+      type: object
+      required: [id, object, owned_by]
+      properties:
+        id: { type: string }
+        object: { const: model }
+        owned_by: { type: string }
+    ModelList:
+      type: object
+      required: [object, data]
+      properties:
+        object: { const: list }
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Model" }
+    Message:
+      type: object
+      required: [role]
+      properties:
+        role: { type: string, enum: [system, user, assistant, tool] }
+        content:
+          oneOf:
+            - { type: string }
+            - { type: "null" }
+        tool_call_id: { type: string }
+        tool_calls:
+          type: array
+          items: { $ref: "#/components/schemas/ToolCall" }
+    FunctionDefinition:
+      type: object
+      required: [name, parameters]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        parameters: { type: object, additionalProperties: true }
+    Tool:
+      type: object
+      required: [type, function]
+      properties:
+        type: { const: function }
+        function: { $ref: "#/components/schemas/FunctionDefinition" }
+    ToolCall:
+      type: object
+      required: [id, type, function]
+      properties:
+        id: { type: string }
+        type: { const: function }
+        function:
+          type: object
+          required: [name, arguments]
+          properties:
+            name: { type: string }
+            arguments: { type: string }
+    ChatRequest:
+      type: object
+      required: [model, messages]
+      properties:
+        model: { type: string, examples: [qwen3-14b-awq] }
+        messages:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/Message" }
+        max_tokens: { type: integer, minimum: 1 }
+        temperature: { type: number }
+        stream: { type: boolean, default: false }
+        tools:
+          type: array
+          items: { $ref: "#/components/schemas/Tool" }
+        tool_choice:
+          oneOf:
+            - { type: string, enum: [none, auto, required] }
+            - { type: object, additionalProperties: true }
+    CompletionRequest:
+      type: object
+      required: [model, prompt]
+      properties:
+        model: { type: string, examples: [qwen3-14b-awq] }
+        prompt:
+          oneOf:
+            - { type: string }
+            - { type: array, items: { type: string } }
+        max_tokens: { type: integer, minimum: 1 }
+        temperature: { type: number }
+        stream: { type: boolean, default: false }
+    EmbeddingRequest:
+      type: object
+      required: [model, input]
+      properties:
+        model: { type: string, examples: [bge-m3] }
+        input:
+          oneOf:
+            - { type: string }
+            - { type: array, minItems: 1, items: { type: string } }
+        encoding_format: { type: string, enum: [float, base64], default: float }
+    Usage:
+      type: object
+      required: [prompt_tokens, total_tokens]
+      properties:
+        prompt_tokens: { type: integer }
+        completion_tokens: { type: integer }
+        total_tokens: { type: integer }
+    ChatResponse:
+      type: object
+      required: [id, object, created, model, choices, usage]
+      properties:
+        id: { type: string }
+        object: { const: chat.completion }
+        created: { type: integer }
+        model: { type: string }
+        choices: { type: array, items: { type: object } }
+        usage: { $ref: "#/components/schemas/Usage" }
+    CompletionResponse:
+      type: object
+      required: [id, object, created, model, choices, usage]
+      properties:
+        id: { type: string }
+        object: { const: text_completion }
+        created: { type: integer }
+        model: { type: string }
+        choices: { type: array, items: { type: object } }
+        usage: { $ref: "#/components/schemas/Usage" }
+    EmbeddingResponse:
+      type: object
+      required: [object, data, model, usage]
+      properties:
+        object: { const: list }
+        data:
+          type: array
+          items:
+            type: object
+            required: [object, index, embedding]
+            properties:
+              object: { const: embedding }
+              index: { type: integer }
+              embedding: { type: array, items: { type: number } }
+        model: { type: string }
+        usage: { $ref: "#/components/schemas/Usage" }
+    Error:
+      type: object
+      properties:
+        object: { const: error }
+        message: { type: string }
+        type: { type: string }
+        code: { oneOf: [{ type: integer }, { type: string }] }

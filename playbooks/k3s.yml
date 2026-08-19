@@ -1,0 +1,316 @@
+---
+- name: Prepare DGX OS nodes and the NVIDIA runtime
+  hosts: k3s_server:k3s_agents
+  become: true
+  gather_facts: true
+  vars_files: [vars/kubernetes.yml]
+  environment: "{{ enterprise_proxy_env | default({}) }}"
+  handlers:
+    - name: Restart k3s
+      ansible.builtin.systemd_service:
+        name: "{{ 'k3s' if inventory_hostname in groups['k3s_server'] else 'k3s-agent' }}"
+        state: restarted
+        daemon_reload: true
+  tasks:
+    - name: Require Ubuntu 24.04
+      ansible.builtin.assert:
+        that:
+          - ansible_distribution == 'Ubuntu'
+          - ansible_distribution_version is version('24.04', '>=')
+        fail_msg: k3s.yml supports Ubuntu 24.04 or newer
+
+    - name: Install host prerequisites
+      ansible.builtin.apt:
+        name: [ca-certificates, curl, gnupg, jq, open-iscsi]
+        state: present
+        update_cache: true
+
+    - name: Create the K3s configuration directory
+      ansible.builtin.file:
+        path: /etc/rancher/k3s
+        state: directory
+        mode: "0755"
+
+    - name: Configure private container registry mirrors
+      ansible.builtin.copy:
+        dest: /etc/rancher/k3s/registries.yaml
+        content: "{{ (k3s_registry_config | default({})) | to_nice_yaml(indent=2) }}"
+        owner: root
+        group: root
+        mode: "0600"
+      when: k3s_registry_config | default({}) | length > 0
+      no_log: true
+      notify: Restart k3s
+
+    - name: Create verified model store
+      ansible.builtin.file:
+        path: /var/lib/spark-fleet/models
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Download the pinned K3s installer
+      ansible.builtin.get_url:
+        url: "{{ k3s_install_script_url }}"
+        dest: /usr/local/sbin/spark-fleet-install-k3s
+        checksum: "sha256:{{ k3s_install_script_sha256 }}"
+        mode: "0755"
+
+    - name: Create the NVIDIA repository keyring directory
+      ansible.builtin.file:
+        path: /usr/share/keyrings
+        state: directory
+        mode: "0755"
+      when: accelerator | default('cpu') == 'gpu'
+
+    - name: Download the NVIDIA Container Toolkit signing key
+      ansible.builtin.get_url:
+        url: https://nvidia.github.io/libnvidia-container/gpgkey
+        dest: /tmp/nvidia-container-toolkit.asc
+        mode: "0644"
+      when: accelerator | default('cpu') == 'gpu'
+
+    - name: Dearmor the NVIDIA Container Toolkit signing key
+      ansible.builtin.command:
+        argv:
+          - gpg
+          - --dearmor
+          - --yes
+          - --output
+          - /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+          - /tmp/nvidia-container-toolkit.asc
+      args:
+        creates: /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+      when: accelerator | default('cpu') == 'gpu'
+
+    - name: Install the NVIDIA Container Toolkit repository definition
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/nvidia-container-toolkit.list
+        mode: "0644"
+        content: |
+          deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://nvidia.github.io/libnvidia-container/stable/deb/$(ARCH) /
+      when: accelerator | default('cpu') == 'gpu'
+
+    - name: Install the pinned NVIDIA Container Toolkit packages
+      ansible.builtin.apt:
+        name:
+          - "nvidia-container-toolkit={{ nvidia_container_toolkit_version }}"
+          - "nvidia-container-toolkit-base={{ nvidia_container_toolkit_version }}"
+          - "libnvidia-container-tools={{ nvidia_container_toolkit_version }}"
+          - "libnvidia-container1={{ nvidia_container_toolkit_version }}"
+        state: present
+        update_cache: true
+        allow_downgrade: true
+      when: accelerator | default('cpu') == 'gpu'
+
+    - name: Verify the DGX Spark GPU and preinstalled driver
+      ansible.builtin.command: nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader
+      register: nvidia_smi
+      changed_when: false
+      when: accelerator | default('cpu') == 'gpu'
+
+- name: Install the K3s control plane
+  hosts: k3s_server
+  become: true
+  gather_facts: false
+  vars_files: [vars/kubernetes.yml]
+  handlers:
+    - name: Restart K3s server
+      ansible.builtin.systemd_service:
+        name: k3s
+        enabled: true
+        state: restarted
+  tasks:
+    - name: Create the K3s configuration directory
+      ansible.builtin.file:
+        path: /etc/rancher/k3s
+        state: directory
+        mode: "0755"
+
+    - name: Configure the K3s server
+      ansible.builtin.copy:
+        dest: /etc/rancher/k3s/config.yaml
+        mode: "0600"
+        content: |
+          write-kubeconfig-mode: "0644"
+          disable:
+            - traefik
+            - servicelb
+          kubelet-arg:
+            - system-reserved=cpu=2,memory={{ k3s_system_reserved_memory }}
+            - eviction-hard=memory.available<{{ k3s_eviction_memory_available }}
+          tls-san:
+            - {{ ansible_host }}
+          node-label:
+            - spark-fleet.example/role=control
+          {% for label in k3s_node_labels | default([]) %}
+            - {{ label }}
+          {% endfor %}
+      notify: Restart K3s server
+
+    - name: Install the pinned K3s server
+      ansible.builtin.command: /usr/local/sbin/spark-fleet-install-k3s
+      environment: >-
+        {{ (enterprise_proxy_env | default({})) | combine({
+          'INSTALL_K3S_VERSION': k3s_version,
+          'INSTALL_K3S_EXEC': 'server'
+        }) }}
+      args:
+        creates: /usr/local/bin/k3s
+
+    - name: Apply K3s server configuration handlers
+      ansible.builtin.meta: flush_handlers
+
+    - name: Wait for the Kubernetes API
+      ansible.builtin.command: k3s kubectl get --raw=/readyz
+      register: k3s_ready
+      retries: 30
+      delay: 5
+      until: k3s_ready.rc == 0
+      changed_when: false
+
+    - name: Read the agent join token
+      ansible.builtin.slurp:
+        src: /var/lib/rancher/k3s/server/node-token
+      register: k3s_node_token
+      no_log: true
+
+- name: Install K3s agents
+  hosts: k3s_agents
+  become: true
+  gather_facts: false
+  vars_files: [vars/kubernetes.yml]
+  environment: "{{ enterprise_proxy_env | default({}) }}"
+  vars:
+    k3s_server_host: "{{ groups['k3s_server'][0] }}"
+    k3s_server_url: "https://{{ hostvars[k3s_server_host].ansible_host }}:6443"
+    k3s_join_token: "{{ hostvars[k3s_server_host].k3s_node_token.content | b64decode | trim }}"
+  handlers:
+    - name: Restart K3s agent
+      ansible.builtin.systemd_service:
+        name: k3s-agent
+        enabled: true
+        state: restarted
+  tasks:
+    - name: Create the K3s configuration directory
+      ansible.builtin.file:
+        path: /etc/rancher/k3s
+        state: directory
+        mode: "0755"
+
+    - name: Configure the K3s agent
+      ansible.builtin.copy:
+        dest: /etc/rancher/k3s/config.yaml
+        mode: "0600"
+        content: |
+          server: {{ k3s_server_url }}
+          token: {{ k3s_join_token }}
+          kubelet-arg:
+            - system-reserved=cpu=2,memory={{ k3s_system_reserved_memory }}
+            - eviction-hard=memory.available<{{ k3s_eviction_memory_available }}
+          node-label:
+          {% for label in k3s_node_labels | default([]) %}
+            - {{ label }}
+          {% endfor %}
+      no_log: true
+      notify: Restart K3s agent
+
+    - name: Install the pinned K3s agent
+      ansible.builtin.command: /usr/local/sbin/spark-fleet-install-k3s
+      environment: >-
+        {{ (enterprise_proxy_env | default({})) | combine({
+          'INSTALL_K3S_VERSION': k3s_version,
+          'INSTALL_K3S_EXEC': 'agent'
+        }) }}
+      args:
+        creates: /usr/local/bin/k3s
+      no_log: true
+
+    - name: Apply K3s agent configuration handlers
+      ansible.builtin.meta: flush_handlers
+
+- name: Bootstrap pinned cluster add-ons and labels
+  hosts: k3s_server
+  become: true
+  gather_facts: false
+  vars_files: [vars/kubernetes.yml]
+  environment: "{{ enterprise_proxy_env | default({}) }}"
+  tasks:
+    - name: Create the K3s chart cache
+      ansible.builtin.file:
+        path: /var/lib/rancher/k3s/server/static/charts
+        state: directory
+        mode: "0755"
+
+    - name: Download checksummed bootstrap charts
+      ansible.builtin.get_url:
+        url: "{{ item.url }}"
+        dest: "/var/lib/rancher/k3s/server/static/charts/{{ item.name }}"
+        checksum: "sha256:{{ item.sha256 }}"
+        mode: "0644"
+      loop:
+        - name: "gpu-operator-v{{ gpu_operator_version }}.tgz"
+          url: "{{ gpu_operator_chart_url }}"
+          sha256: "{{ gpu_operator_chart_sha256 }}"
+        - name: "kuberay-operator-{{ kuberay_operator_version }}.tgz"
+          url: "{{ kuberay_operator_chart_url }}"
+          sha256: "{{ kuberay_operator_chart_sha256 }}"
+
+    - name: Install K3s HelmChart definitions
+      ansible.builtin.copy:
+        dest: /var/lib/rancher/k3s/server/manifests/spark-fleet-addons.yaml
+        mode: "0644"
+        content: |
+          apiVersion: helm.cattle.io/v1
+          kind: HelmChart
+          metadata:
+            name: gpu-operator
+            namespace: kube-system
+          spec:
+            chart: https://%{KUBERNETES_API}%/static/charts/gpu-operator-v{{ gpu_operator_version }}.tgz
+            targetNamespace: gpu-operator
+            createNamespace: true
+            valuesContent: |-
+              driver:
+                enabled: false
+              toolkit:
+                enabled: false
+          ---
+          apiVersion: helm.cattle.io/v1
+          kind: HelmChart
+          metadata:
+            name: kuberay-operator
+            namespace: kube-system
+          spec:
+            chart: https://%{KUBERNETES_API}%/static/charts/kuberay-operator-{{ kuberay_operator_version }}.tgz
+            targetNamespace: kuberay-system
+            createNamespace: true
+
+    - name: Wait for all expected nodes
+      ansible.builtin.command: >-
+        k3s kubectl wait node/{{ item }} --for=condition=Ready --timeout=300s
+      loop: "{{ groups['k3s_server'] + groups['k3s_agents'] }}"
+      changed_when: false
+
+    - name: Protect GPU nodes from general workloads
+      ansible.builtin.command: >-
+        k3s kubectl taint node {{ item }} nvidia.com/gpu=present:NoSchedule --overwrite
+      loop: "{{ groups['k3s_server'] + groups['k3s_agents'] }}"
+      when: hostvars[item].accelerator | default('mock') == 'gpu'
+      register: gpu_taint
+      changed_when: "'tainted' in gpu_taint.stdout and 'not tainted' not in gpu_taint.stdout"
+
+    - name: Show cluster nodes and allocatable GPUs
+      ansible.builtin.shell: >-
+        set -o pipefail;
+        k3s kubectl get nodes -o json |
+        jq -r '.items[] | [.metadata.name, (.status.allocatable["nvidia.com/gpu"] // "-")] | @tsv'
+      args:
+        executable: /bin/bash
+      changed_when: false
+      register: k3s_nodes
+
+    - name: Report the Kubernetes node inventory
+      ansible.builtin.debug:
+        var: k3s_nodes.stdout_lines

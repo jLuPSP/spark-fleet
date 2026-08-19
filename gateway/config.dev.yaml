@@ -1,0 +1,34 @@
+# APISIX 3.17.0 static config for the single-box dev stack (standalone data plane).
+# Mounted at /usr/local/apisix/conf/config.yaml. Changes here need a container
+# restart; only apisix.yaml (the generated rules file) hot-reloads.
+apisix:
+  node_listen:
+    - 9080
+  ssl:
+    enable: false
+  enable_control: true          # control API on 127.0.0.1:9090 (docker exec to query)
+
+deployment:
+  role: data_plane              # Admin API never starts in this role
+  role_data_plane:
+    config_provider: yaml       # rules come from conf/apisix.yaml, mtime-watched (1s)
+
+plugin_attr:
+  prometheus:
+    export_uri: /apisix/prometheus/metrics
+    enable_export_server: true
+    export_addr:
+      ip: 0.0.0.0               # expose metrics to an in-cluster scraper
+      port: 9091
+    metrics:
+      # The serverless role check overwrites X-Fleet-Team on every authenticated
+      # request, so this label is trustworthy; it powers the per-team dashboard.
+      http_status:
+        extra_labels:
+          - team: $http_x_fleet_team
+      http_latency:
+        extra_labels:
+          - team: $http_x_fleet_team
+      bandwidth:
+        extra_labels:
+          - team: $http_x_fleet_team

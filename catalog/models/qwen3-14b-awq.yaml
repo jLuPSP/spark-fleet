@@ -1,0 +1,25 @@
+name: qwen3-14b-awq
+state: approved
+repo: Qwen/Qwen3-14B-AWQ
+revision: 31c69efc29464b6bb0aee1398b5a7b50a99340c3
+task: generation
+quant: awq
+context_len: 4096
+vram_gb: 13
+requires_remote_code: false
+allow_unsafe_serialization: false
+engine_args:
+  quantization: awq
+  dtype: half
+  max_num_seqs: 4
+placement:
+  - node: node1
+    replicas: 1
+    gpu_memory_utilization: 0.92
+  - node: node3
+    replicas: 1
+    gpu_memory_utilization: 0.92
+    tensor_parallel: 2
+owner: platform-team
+approval_ticket: FLEET-100
+security_approval: SEC-100

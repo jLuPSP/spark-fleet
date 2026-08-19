@@ -1,0 +1,9 @@
+# DEV_AUTH mode: the gateway trusts the self-issued dev issuer served by the
+# dev-jwks Service inside the isolated Kubernetes test namespace. Nothing here is a secret.
+# The same fields exist in auth.prod.yml (gitignored, from auth.prod.yml.example);
+# the generator template is identical, only these values change.
+discovery: http://dev-jwks:8080/.well-known/openid-configuration
+client_id: spark-fleet-dev
+valid_issuers:
+  - http://dev-jwks:8080
+ssl_verify: false

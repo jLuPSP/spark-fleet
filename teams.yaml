@@ -1,0 +1,20 @@
+# The Entra app role is read from the token's roles claim. Limits apply per
+# team and per model route at APISIX.
+teams:
+  - name: team-alpha
+    entra_app_role: Fleet.TeamAlpha
+    allowed_models:
+      - qwen3-14b-awq
+      - bge-m3
+    limits:
+      requests_per_minute: 120
+      tokens_per_hour: 2000000
+
+  # Restricted example role used to verify catalog filtering and quota policy.
+  - name: team-qa
+    entra_app_role: Fleet.TeamQA
+    allowed_models:
+      - qwen3-14b-awq
+    limits:
+      requests_per_minute: 5
+      tokens_per_hour: 50000

@@ -1,0 +1,13 @@
+# Everything this repo ships gets mounted into or executed on Linux.
+# Force LF so a Windows checkout never breaks a container mount or a shebang.
+* text=auto eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.j2 text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.cfg text eol=lf
+*.toml text eol=lf
+Makefile text eol=lf

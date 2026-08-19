@@ -1,0 +1,3 @@
+# Install only on the audited model-import runner. Standard HTTPS_PROXY and
+# HF_ENDPOINT environment variables are honored by huggingface_hub.
+huggingface-hub>=0.33,<2

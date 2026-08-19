@@ -1,0 +1,39 @@
+# Pinned images and host requirements. Digests are the deploy contract; tags are
+# documentation. scripts/pin_digests.py resolves tag -> digest via the registry API,
+# and CI fails if any digest is null or stale (validate.py --require-digests).
+# Schema: schemas/versions.schema.json.
+#
+# Version notes (verified 2026-08-17):
+#   apisix 3.17.0: needed for optional client_secret in bearer-only JWKS mode,
+#     max_retries on ai-proxy-multi, and the SSE streaming stability fixes.
+#     Minimum viable is 3.16.0 (ai-rate-limiting rules[]); post_arg.model JSON
+#     routing needs >= 3.14.0.
+#   vllm v0.27.1: serves standalone GPU placements; Ray Serve owns distributed ones.
+
+platform:
+  k3s: v1.36.3+k3s1
+  argo_cd: v3.5.1
+  kuberay_operator: v1.6.2
+  ray: 2.55.1
+  gpu_operator: v26.3.3
+  nvidia_device_plugin: v0.19.3
+
+images:
+  vllm:
+    repo: vllm/vllm-openai
+    tag: v0.27.1
+    digest: "sha256:0a51ea5b4ae2dc5d81890e5173f54203d2a3ae0cfffe51b8fd2afd4391bfd967"
+  ray_llm:
+    # Official Ray Serve LLM image. This tag is amd64-only; the DGX Spark
+    # overlay must use the repository's future arm64 build before promotion.
+    repo: rayproject/ray-llm
+    tag: 2.55.1-py311-cu128
+    digest: "sha256:61aeac65db16c48280b076c81a368550e78035a210c28413fe1c8bde504fa9a9"
+  apisix:
+    repo: apache/apisix
+    tag: 3.17.0-debian
+    digest: "sha256:0e5377839f4ff5e322a5686ab6ce6797ba768008aca1bfc9b71149c3b326c4df"
+  python:
+    repo: python
+    tag: 3.12-slim
+    digest: "sha256:2c941e860699f878900b0edc2403613c234d4b32eda3cc9fa7036991a2a63c4a"

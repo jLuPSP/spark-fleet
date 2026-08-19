@@ -1,0 +1,28 @@
+# APISIX static configuration for Entra-backed deployments. Auth endpoints and
+# audience live in the generated apisix.yaml, never in this public file.
+apisix:
+  node_listen: [9080]
+  ssl:
+    enable: false
+  enable_control: true
+
+deployment:
+  role: data_plane
+  role_data_plane:
+    config_provider: yaml
+
+plugin_attr:
+  prometheus:
+    export_uri: /apisix/prometheus/metrics
+    enable_export_server: true
+    export_addr: { ip: 0.0.0.0, port: 9091 }
+    metrics:
+      http_status:
+        extra_labels:
+          - team: $http_x_fleet_team
+      http_latency:
+        extra_labels:
+          - team: $http_x_fleet_team
+      bandwidth:
+        extra_labels:
+          - team: $http_x_fleet_team

@@ -1,0 +1,16 @@
+# Entra ID production auth config. Copy to gateway/auth.prod.yml (gitignored) and
+# fill in your tenant. See docs/AUTH.md for the app registration walkthrough.
+#
+# TENANT_ID     = Entra Directory (tenant) ID GUID
+# API_CLIENT_ID = Application (client) ID GUID of the API app registration
+#                 (the app that defines the app roles; requestedAccessTokenVersion
+#                 MUST be 2, or tokens arrive as v1.0 with a different issuer and
+#                 nothing validates).
+#
+# v2.0 access tokens carry aud = API_CLIENT_ID (the GUID, never the api:// URI),
+# which is why client_id below is the GUID: APISIX matches aud against it.
+discovery: https://login.microsoftonline.com/TENANT_ID/v2.0/.well-known/openid-configuration
+client_id: API_CLIENT_ID
+valid_issuers:
+  - https://login.microsoftonline.com/TENANT_ID/v2.0
+ssl_verify: true

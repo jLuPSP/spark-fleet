@@ -1,0 +1,61 @@
+---
+# Copy to inventory/dgx-spark-pairs.private.yml and replace every placeholder.
+# fabric_apply remains false until the generated netplan has been reviewed.
+all:
+  vars:
+    ansible_user: PLATFORM_ADMIN
+    # Put real proxy and registry credentials only in the ignored private copy.
+    enterprise_proxy_env: {}
+    k3s_registry_config: {}
+    fabric_topology: direct-pairs
+    fabric_apply: false
+    fabric_require_carrier: true
+  children:
+    k3s_server:
+      hosts:
+        spark-01:
+          ansible_host: SPARK_01_MANAGEMENT_ADDRESS
+          accelerator: gpu
+          k3s_node_labels:
+            - spark-fleet.example/fabric-topology=direct-pairs
+            - spark-fleet.example/fabric-group=pair-a
+            - spark-fleet.example/preferred-workload=inference
+    k3s_agents:
+      hosts:
+        spark-02: { ansible_host: SPARK_02_MANAGEMENT_ADDRESS, accelerator: gpu, k3s_node_labels: [spark-fleet.example/fabric-topology=direct-pairs, spark-fleet.example/fabric-group=pair-a, spark-fleet.example/preferred-workload=inference] }
+        spark-03: { ansible_host: SPARK_03_MANAGEMENT_ADDRESS, accelerator: gpu, k3s_node_labels: [spark-fleet.example/fabric-topology=direct-pairs, spark-fleet.example/fabric-group=pair-b, spark-fleet.example/preferred-workload=inference] }
+        spark-04: { ansible_host: SPARK_04_MANAGEMENT_ADDRESS, accelerator: gpu, k3s_node_labels: [spark-fleet.example/fabric-topology=direct-pairs, spark-fleet.example/fabric-group=pair-b, spark-fleet.example/preferred-workload=inference] }
+        spark-05: { ansible_host: SPARK_05_MANAGEMENT_ADDRESS, accelerator: gpu, k3s_node_labels: [spark-fleet.example/fabric-topology=direct-pairs, spark-fleet.example/fabric-group=pair-c, spark-fleet.example/preferred-workload=inference] }
+        spark-06: { ansible_host: SPARK_06_MANAGEMENT_ADDRESS, accelerator: gpu, k3s_node_labels: [spark-fleet.example/fabric-topology=direct-pairs, spark-fleet.example/fabric-group=pair-c, spark-fleet.example/preferred-workload=inference] }
+        spark-07: { ansible_host: SPARK_07_MANAGEMENT_ADDRESS, accelerator: gpu, k3s_node_labels: [spark-fleet.example/fabric-topology=direct-pairs, spark-fleet.example/fabric-group=pair-d, spark-fleet.example/preferred-workload=training] }
+        spark-08: { ansible_host: SPARK_08_MANAGEMENT_ADDRESS, accelerator: gpu, k3s_node_labels: [spark-fleet.example/fabric-topology=direct-pairs, spark-fleet.example/fabric-group=pair-d, spark-fleet.example/preferred-workload=training] }
+    spark_nodes:
+      children:
+        fabric_pair_a:
+          vars: { fabric_validation_group: fabric_pair_a }
+          hosts:
+            spark-01:
+              fabric_interfaces: [{ name: enp1s0f1np1, address: 10.200.10.11/24 }, { name: enP2p1s0f1np1, address: 10.200.11.11/24 }]
+            spark-02:
+              fabric_interfaces: [{ name: enp1s0f1np1, address: 10.200.10.12/24 }, { name: enP2p1s0f1np1, address: 10.200.11.12/24 }]
+        fabric_pair_b:
+          vars: { fabric_validation_group: fabric_pair_b }
+          hosts:
+            spark-03:
+              fabric_interfaces: [{ name: enp1s0f1np1, address: 10.200.20.11/24 }, { name: enP2p1s0f1np1, address: 10.200.21.11/24 }]
+            spark-04:
+              fabric_interfaces: [{ name: enp1s0f1np1, address: 10.200.20.12/24 }, { name: enP2p1s0f1np1, address: 10.200.21.12/24 }]
+        fabric_pair_c:
+          vars: { fabric_validation_group: fabric_pair_c }
+          hosts:
+            spark-05:
+              fabric_interfaces: [{ name: enp1s0f1np1, address: 10.200.30.11/24 }, { name: enP2p1s0f1np1, address: 10.200.31.11/24 }]
+            spark-06:
+              fabric_interfaces: [{ name: enp1s0f1np1, address: 10.200.30.12/24 }, { name: enP2p1s0f1np1, address: 10.200.31.12/24 }]
+        fabric_pair_d:
+          vars: { fabric_validation_group: fabric_pair_d }
+          hosts:
+            spark-07:
+              fabric_interfaces: [{ name: enp1s0f1np1, address: 10.200.40.11/24 }, { name: enP2p1s0f1np1, address: 10.200.41.11/24 }]
+            spark-08:
+              fabric_interfaces: [{ name: enp1s0f1np1, address: 10.200.40.12/24 }, { name: enP2p1s0f1np1, address: 10.200.41.12/24 }]

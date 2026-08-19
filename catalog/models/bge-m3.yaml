@@ -1,0 +1,20 @@
+name: bge-m3
+state: approved
+repo: BAAI/bge-m3
+revision: 5617a9f61b028005a4858fdac845db406aefb181
+task: embedding
+quant: none
+context_len: 8192
+vram_gb: 6
+requires_remote_code: false
+allow_unsafe_serialization: false
+engine_args:
+  runner: pooling
+  dtype: half
+placement:
+  - node: node2
+    replicas: 1
+    gpu_memory_utilization: 0.55
+owner: platform-team
+approval_ticket: FLEET-101
+security_approval: SEC-101

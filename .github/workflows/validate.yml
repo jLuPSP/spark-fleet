@@ -1,0 +1,31 @@
+name: validate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  catalog-and-render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+      - run: pip install -r requirements-ci.txt
+      - run: python scripts/validate.py --require-digests --profile clusters/dgx-spark/cluster.yaml
+      - run: python scripts/validate.py --require-digests --profile clusters/dgx-spark-switched/cluster.yaml
+      - run: python scripts/pin_digests.py --check
+      - run: python scripts/render_stage_vars.py --profile clusters/dgx-spark/cluster.yaml --output build/model-stage-pairs.yml
+      - run: python scripts/render_stage_vars.py --profile clusters/dgx-spark-switched/cluster.yaml --output build/model-stage-switched.yml
+      - run: pytest tests/unit -v -s
+      - run: ansible-playbook -i inventory/dgx-spark-pairs.example.yml playbooks/dgx-spark.yml --syntax-check
+      - run: ansible-playbook -i inventory/dgx-spark-switched.example.yml playbooks/dgx-spark.yml --syntax-check
+      - run: ansible-playbook -i inventory/dgx-spark-switched.example.yml playbooks/stage-models.yml --syntax-check
+      - run: ansible-lint playbooks/

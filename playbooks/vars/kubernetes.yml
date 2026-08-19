@@ -1,0 +1,18 @@
+---
+# Artifact pins for the DGX Spark deployment path. Proxy and private-registry
+# values come from the ignored inventory/Vault, not this higher-precedence file.
+k3s_version: v1.36.3+k3s1
+k3s_install_script_url: https://raw.githubusercontent.com/k3s-io/k3s/v1.36.3+k3s1/install.sh
+k3s_install_script_sha256: 46177d4c99440b4c0311b67233823a8e8a2fc09693f6c89af1a7161e152fbfad
+k3s_system_reserved_memory: 16Gi
+k3s_eviction_memory_available: 2Gi
+
+nvidia_container_toolkit_version: 1.19.1-1
+
+gpu_operator_version: 26.3.3
+gpu_operator_chart_url: https://helm.ngc.nvidia.com/nvidia/charts/gpu-operator-v26.3.3.tgz
+gpu_operator_chart_sha256: 59abb5852a24b3ae0ef757bfea3051f419acbf559ee5efd72f0672d28af56a68
+
+kuberay_operator_version: 1.6.2
+kuberay_operator_chart_url: https://github.com/ray-project/kuberay-helm/releases/download/kuberay-operator-1.6.2/kuberay-operator-1.6.2.tgz
+kuberay_operator_chart_sha256: 660e709573ea49455fea0b34b40a38afc217b8354bcf0f17aab2a3249d3c1b5f

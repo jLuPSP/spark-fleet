@@ -1,0 +1,4 @@
+# CI / WSL control node extras. Ansible does not support a native Windows control node.
+-r requirements-dev.txt
+ansible-core>=2.17,<2.19
+ansible-lint>=24.0

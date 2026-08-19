@@ -1,0 +1,49 @@
+name: render-release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    # This runner has approved access to the internal model store. GitHub-hosted
+    # runners deliberately cannot cross the corporate boundary.
+    runs-on: [self-hosted, spark-fleet-release]
+    strategy:
+      matrix:
+        topology:
+          - { name: pairs, profile: clusters/dgx-spark/cluster.yaml }
+          - { name: switched, profile: clusters/dgx-spark-switched/cluster.yaml }
+    concurrency: { group: "spark-fleet-render-${{ matrix.topology.name }}", cancel-in-progress: false }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+      - run: pip install -r requirements-ci.txt
+      - name: Require every active model artifact to exist
+        env:
+          MODEL_STORE_BEARER_TOKEN: ${{ secrets.MODEL_STORE_BEARER_TOKEN }}
+          MODEL_STORE_CA_BUNDLE: ${{ vars.MODEL_STORE_CA_BUNDLE }}
+        run: python scripts/verify_model_artifacts.py
+      - name: Materialize Entra gateway profile
+        env:
+          FLEET_AUTH_YAML: ${{ secrets.FLEET_AUTH_YAML }}
+        run: printf '%s' "$FLEET_AUTH_YAML" > gateway/auth.prod.yml
+      - name: Validate and render the DGX release
+        run: |
+          python scripts/validate.py --require-digests \
+            --profile "${{ matrix.topology.profile }}"
+          python scripts/render_kubernetes.py \
+            --profile "${{ matrix.topology.profile }}" \
+            --auth-mode prod \
+            --output "build/kubernetes/dgx-spark-${{ matrix.topology.name }}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: "spark-fleet-${{ matrix.topology.name }}-manifest"
+          path: "build/kubernetes/dgx-spark-${{ matrix.topology.name }}/"
+          if-no-files-found: error

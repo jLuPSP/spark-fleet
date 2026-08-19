@@ -1,0 +1,16 @@
+# Managed by Ansible. Edit the private inventory, not this file.
+network:
+  version: 2
+  ethernets:
+{% for interface in fabric_interfaces %}
+    {{ interface.name }}:
+      addresses:
+        - {{ interface.address }}
+      dhcp4: false
+      dhcp6: false
+      link-local: []
+      optional: true
+{% if interface.mtu is defined %}
+      mtu: {{ interface.mtu }}
+{% endif %}
+{% endfor %}

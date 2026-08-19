@@ -1,0 +1,6 @@
+---
+- name: Configure the high-speed fabric
+  ansible.builtin.import_playbook: fabric.yml
+
+- name: Configure K3s and cluster prerequisites
+  ansible.builtin.import_playbook: k3s.yml

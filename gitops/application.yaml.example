@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: spark-fleet
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/REPLACE_ORG/spark-fleet.git
+    targetRevision: REPLACE_ENVIRONMENT_BRANCH
+    path: gitops/releases/REPLACE_CLUSTER
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: spark-fleet
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

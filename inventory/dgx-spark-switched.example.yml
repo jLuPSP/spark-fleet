@@ -1,0 +1,39 @@
+---
+# Copy to inventory/dgx-spark-switched.private.yml and replace every placeholder.
+# The switch ports must already share the intended layer-2 segment.
+all:
+  vars:
+    ansible_user: PLATFORM_ADMIN
+    # Put real proxy and registry credentials only in the ignored private copy.
+    enterprise_proxy_env: {}
+    k3s_registry_config: {}
+    fabric_topology: switched
+    fabric_apply: false
+    fabric_require_carrier: true
+    fabric_validation_group: spark_nodes
+  children:
+    k3s_server:
+      hosts:
+        spark-01:
+          ansible_host: SPARK_01_MANAGEMENT_ADDRESS
+          accelerator: gpu
+          k3s_node_labels: [spark-fleet.example/fabric-topology=switched, spark-fleet.example/fabric-group=fabric-a, spark-fleet.example/preferred-workload=inference]
+    k3s_agents:
+      hosts:
+        spark-02: { ansible_host: SPARK_02_MANAGEMENT_ADDRESS, accelerator: gpu, k3s_node_labels: [spark-fleet.example/fabric-topology=switched, spark-fleet.example/fabric-group=fabric-a, spark-fleet.example/preferred-workload=inference] }
+        spark-03: { ansible_host: SPARK_03_MANAGEMENT_ADDRESS, accelerator: gpu, k3s_node_labels: [spark-fleet.example/fabric-topology=switched, spark-fleet.example/fabric-group=fabric-a, spark-fleet.example/preferred-workload=inference] }
+        spark-04: { ansible_host: SPARK_04_MANAGEMENT_ADDRESS, accelerator: gpu, k3s_node_labels: [spark-fleet.example/fabric-topology=switched, spark-fleet.example/fabric-group=fabric-a, spark-fleet.example/preferred-workload=inference] }
+        spark-05: { ansible_host: SPARK_05_MANAGEMENT_ADDRESS, accelerator: gpu, k3s_node_labels: [spark-fleet.example/fabric-topology=switched, spark-fleet.example/fabric-group=fabric-a, spark-fleet.example/preferred-workload=inference] }
+        spark-06: { ansible_host: SPARK_06_MANAGEMENT_ADDRESS, accelerator: gpu, k3s_node_labels: [spark-fleet.example/fabric-topology=switched, spark-fleet.example/fabric-group=fabric-a, spark-fleet.example/preferred-workload=inference] }
+        spark-07: { ansible_host: SPARK_07_MANAGEMENT_ADDRESS, accelerator: gpu, k3s_node_labels: [spark-fleet.example/fabric-topology=switched, spark-fleet.example/fabric-group=fabric-a, spark-fleet.example/preferred-workload=training] }
+        spark-08: { ansible_host: SPARK_08_MANAGEMENT_ADDRESS, accelerator: gpu, k3s_node_labels: [spark-fleet.example/fabric-topology=switched, spark-fleet.example/fabric-group=fabric-a, spark-fleet.example/preferred-workload=training] }
+    spark_nodes:
+      hosts:
+        spark-01: { fabric_interfaces: [{ name: enp1s0f1np1, address: 10.210.0.11/24 }, { name: enP2p1s0f1np1, address: 10.211.0.11/24 }] }
+        spark-02: { fabric_interfaces: [{ name: enp1s0f1np1, address: 10.210.0.12/24 }, { name: enP2p1s0f1np1, address: 10.211.0.12/24 }] }
+        spark-03: { fabric_interfaces: [{ name: enp1s0f1np1, address: 10.210.0.13/24 }, { name: enP2p1s0f1np1, address: 10.211.0.13/24 }] }
+        spark-04: { fabric_interfaces: [{ name: enp1s0f1np1, address: 10.210.0.14/24 }, { name: enP2p1s0f1np1, address: 10.211.0.14/24 }] }
+        spark-05: { fabric_interfaces: [{ name: enp1s0f1np1, address: 10.210.0.15/24 }, { name: enP2p1s0f1np1, address: 10.211.0.15/24 }] }
+        spark-06: { fabric_interfaces: [{ name: enp1s0f1np1, address: 10.210.0.16/24 }, { name: enP2p1s0f1np1, address: 10.211.0.16/24 }] }
+        spark-07: { fabric_interfaces: [{ name: enp1s0f1np1, address: 10.210.0.17/24 }, { name: enP2p1s0f1np1, address: 10.211.0.17/24 }] }
+        spark-08: { fabric_interfaces: [{ name: enp1s0f1np1, address: 10.210.0.18/24 }, { name: enP2p1s0f1np1, address: 10.211.0.18/24 }] }

@@ -1,0 +1,33 @@
+# Private environment values: never commit
+.env
+.env.*
+!.env.example
+!*.env.example
+private/
+secrets/
+
+# Private inventory copies (real IPs live here, never in tracked files)
+inventory/*.private.yml
+gateway/auth.prod.yml
+clusters/*/*.private.yml
+kubeconfig*
+kilo.jsonc
+
+# Dev auth material (generated locally by scripts/dev_auth.py)
+dev/auth/keys/
+dev/auth/www/
+
+# Generated runtime output (golden copies live in tests/golden/)
+build/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Editor / OS noise
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
